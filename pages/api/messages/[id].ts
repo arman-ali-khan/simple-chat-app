@@ -26,7 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       const result = await messagesCollection.updateOne(
-        { _id: new ObjectId(id) },
+        { _id: new ObjectId(id) as unknown as string },
         { 
           $set: { 
             messageText: messageText.trim(),
@@ -39,7 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(404).json({ error: 'Message not found' });
       }
 
-      const updatedMessage = await messagesCollection.findOne({ _id: new ObjectId(id) });
+      const updatedMessage = await messagesCollection.findOne({ _id: new ObjectId(id) as unknown as string });
       res.status(200).json(updatedMessage);
     } catch (error) {
       console.error('Error updating message:', error);
@@ -47,7 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   } else if (req.method === 'DELETE') {
     try {
-      const result = await messagesCollection.deleteOne({ _id: new ObjectId(id) });
+      const result = await messagesCollection.deleteOne({ _id: new ObjectId(id) as unknown as string });
 
       if (result.deletedCount === 0) {
         return res.status(404).json({ error: 'Message not found' });
