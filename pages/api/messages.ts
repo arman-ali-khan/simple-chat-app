@@ -9,25 +9,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'GET') {
     try {
       const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 50;
+      const limit = parseInt(req.query.limit as string) || 20;
       const skip = (page - 1) * limit;
 
+      // Get total count
+      const total = await messagesCollection.countDocuments();
+
+      // Get messages with pagination, sorted by timestamp (oldest first for pagination)
+      // We'll reverse the order in the frontend to show newest at bottom
       const messages = await messagesCollection
         .find({})
-        .sort({ timestamp: 1 })
+        .sort({ timestamp: -1 }) // Newest first from database
         .skip(skip)
         .limit(limit)
         .toArray();
 
-      const total = await messagesCollection.countDocuments();
+      // Reverse the messages so oldest appears first in the returned array
+      // This ensures proper chronological order when displaying
+      const reversedMessages = messages.reverse();
 
       res.status(200).json({
-        messages,
+        messages: reversedMessages,
         pagination: {
           page,
           limit,
           total,
           pages: Math.ceil(total / limit),
+          hasMore: page < Math.ceil(total / limit),
         },
       });
     } catch (error) {

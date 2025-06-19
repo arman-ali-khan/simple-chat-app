@@ -9,10 +9,12 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageBubble } from '@/components/message-bubble';
 import { ImageUpload } from '@/components/image-upload';
-import { Send, MessageCircle, ArrowLeft, Wifi, WifiOff } from 'lucide-react';
+import { Send, MessageCircle, ArrowLeft, Wifi, WifiOff, ChevronUp } from 'lucide-react';
 import { ChatMessage } from '@/types/message';
 
 let socket: Socket;
+
+const MESSAGES_PER_PAGE = 20;
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -21,7 +23,12 @@ export default function ChatPage() {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [totalMessages, setTotalMessages] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   const scrollToBottom = () => {
@@ -55,8 +62,8 @@ export default function ChatPage() {
     // Initialize socket connection
     socketInitializer();
 
-    // Load chat history
-    loadChatHistory();
+    // Load initial chat history
+    loadChatHistory(1, true);
 
     return () => {
       if (socket) {
@@ -66,8 +73,11 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    // Only scroll to bottom when new messages are added to the current view
+    if (messages.length > 0 && currentPage === 1) {
+      scrollToBottom();
+    }
+  }, [messages, currentPage]);
 
   const socketInitializer = async () => {
     // Initialize the socket server
@@ -97,38 +107,78 @@ export default function ChatPage() {
 
     socket.on('newMessage', (message: ChatMessage) => {
       console.log('Received new message:', message);
-      // Add message to state
-      setMessages(prev => [...prev, message]);
+      // Only add message if it's not already in the list (prevent duplicates)
+      setMessages(prev => {
+        const exists = prev.some(msg => msg.id === message.id || msg._id === message._id);
+        if (exists) {
+          return prev;
+        }
+        // Add new message to the end (newest messages at bottom)
+        return [...prev, message];
+      });
+      setTotalMessages(prev => prev + 1);
     });
 
     socket.on('messageUpdated', (updatedMessage: ChatMessage) => {
       console.log('Message updated:', updatedMessage);
       setMessages(prev => prev.map(msg => 
-        msg.id === updatedMessage.id ? updatedMessage : msg
+        (msg.id === updatedMessage.id || msg._id === updatedMessage._id) ? updatedMessage : msg
       ));
     });
 
     socket.on('messageDeleted', (messageId: string) => {
       console.log('Message deleted:', messageId);
-      setMessages(prev => prev.filter(msg => msg.id !== messageId));
+      setMessages(prev => prev.filter(msg => msg.id !== messageId && msg._id !== messageId));
+      setTotalMessages(prev => prev - 1);
     });
   };
 
-  const loadChatHistory = async () => {
+  const loadChatHistory = async (page: number, isInitial: boolean = false) => {
     try {
-      const response = await fetch('/api/messages');
+      if (!isInitial) {
+        setIsLoadingMore(true);
+      }
+
+      const response = await fetch(`/api/messages?page=${page}&limit=${MESSAGES_PER_PAGE}`);
       if (response.ok) {
         const data = await response.json();
-        const messagesWithId = data.messages.map((msg: any) => ({
+        const newMessages = data.messages.map((msg: any) => ({
           ...msg,
           id: msg._id,
         }));
-        setMessages(messagesWithId);
+
+        if (isInitial) {
+          // For initial load, set messages directly
+          setMessages(newMessages);
+          setCurrentPage(1);
+        } else {
+          // For pagination, prepend older messages to the beginning
+          setMessages(prev => {
+            // Remove duplicates and prepend new messages
+            const existingIds = new Set(prev.map(msg => msg.id || msg._id));
+            const uniqueNewMessages = newMessages.filter((msg: ChatMessage) => 
+              !existingIds.has(msg.id || msg._id)
+            );
+            return [...uniqueNewMessages, ...prev];
+          });
+          setCurrentPage(page);
+        }
+
+        setTotalMessages(data.pagination.total);
+        setHasMoreMessages(data.pagination.page < data.pagination.pages);
       }
     } catch (error) {
       console.error('Error loading chat history:', error);
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  };
+
+  const loadOlderMessages = async () => {
+    if (hasMoreMessages && !isLoadingMore) {
+      const nextPage = currentPage + 1;
+      await loadChatHistory(nextPage);
     }
   };
 
@@ -161,7 +211,16 @@ export default function ChatPage() {
         };
         
         // Add message to local state immediately for the sender
-        setMessages(prev => [...prev, messageToAdd]);
+        setMessages(prev => {
+          // Check if message already exists to prevent duplicates
+          const exists = prev.some(msg => msg.id === messageToAdd.id || msg._id === messageToAdd._id);
+          if (exists) {
+            return prev;
+          }
+          return [...prev, messageToAdd];
+        });
+        
+        setTotalMessages(prev => prev + 1);
         
         // Emit to other users via socket (they will receive it via 'newMessage' event)
         if (socket && socket.connected) {
@@ -194,7 +253,7 @@ export default function ChatPage() {
         
         // Update message in local state
         setMessages(prev => prev.map(msg => 
-          msg.id === messageId ? messageToUpdate : msg
+          (msg.id === messageId || msg._id === messageId) ? messageToUpdate : msg
         ));
         
         // Emit to other users via socket
@@ -215,7 +274,8 @@ export default function ChatPage() {
 
       if (response.ok) {
         // Remove message from local state
-        setMessages(prev => prev.filter(msg => msg.id !== messageId));
+        setMessages(prev => prev.filter(msg => msg.id !== messageId && msg._id !== messageId));
+        setTotalMessages(prev => prev - 1);
         
         // Emit to other users via socket
         if (socket && socket.connected) {
@@ -300,6 +360,11 @@ export default function ChatPage() {
                   {isConnected && isOnline ? 'Connected' : 'Disconnected'}
                 </span>
               </div>
+
+              {/* Message Count */}
+              <div className="text-xs sm:text-sm">
+                {messages.length} of {totalMessages}
+              </div>
             </div>
           </div>
         </div>
@@ -308,11 +373,37 @@ export default function ChatPage() {
       {/* Messages Area */}
       <div className="flex-1 overflow-hidden">
         <div className="max-w-4xl mx-auto h-full flex flex-col">
-          <ScrollArea className="flex-1 p-2 sm:p-4">
+          <ScrollArea className="flex-1 p-2 sm:p-4" ref={scrollAreaRef}>
             <div className="space-y-3 sm:space-y-4 pb-4">
+              {/* Load Older Messages Button */}
+              {hasMoreMessages && (
+                <div className="flex justify-center py-4">
+                  <Button
+                    onClick={loadOlderMessages}
+                    disabled={isLoadingMore}
+                    variant="outline"
+                    size="sm"
+                    className="bg-white/80 backdrop-blur-sm"
+                  >
+                    {isLoadingMore ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <ChevronUp className="w-4 h-4 mr-2" />
+                        View older messages
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {/* Messages */}
               {messages.map((message) => (
                 <MessageBubble
-                  key={message.id}
+                  key={message.id || message._id}
                   message={message}
                   isOwnMessage={message.senderUsername === username}
                   onEdit={editMessage}

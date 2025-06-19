@@ -12,9 +12,10 @@ export interface Message {
   imageUrl?: string;
   imageData?: string;
   timestamp: Date;
+  updatedAt?: Date;
   type: 'text' | 'image';
 }
 
 export interface ChatMessage extends Message {
-  id: string;
+  id?: string;
 }

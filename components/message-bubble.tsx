@@ -40,7 +40,7 @@ export function MessageBubble({ message, isOwnMessage, onEdit, onDelete }: Messa
 
   const handleSaveEdit = () => {
     if (editText.trim() && editText !== message.messageText) {
-      onEdit(message.id, editText.trim());
+      onEdit(message.id || message._id || '', editText.trim());
     }
     setIsEditing(false);
   };
@@ -51,7 +51,7 @@ export function MessageBubble({ message, isOwnMessage, onEdit, onDelete }: Messa
   };
 
   const handleDelete = () => {
-    onDelete(message.id);
+    onDelete(message.id || message._id || '');
   };
 
   return (
@@ -95,9 +95,9 @@ export function MessageBubble({ message, isOwnMessage, onEdit, onDelete }: Messa
                         }}
                       />
                       <Button size="sm" onClick={handleSaveEdit} className="p-1">
-                        <Check className="w-3 h-3" />
+                        <Check className="w-6 h-3" />
                       </Button>
-                      <Button size="sm" variant="outline" onClick={handleCancelEdit} className="p-1">
+                      <Button size="sm" variant="destructive" onClick={handleCancelEdit} className="p-1">
                         <X className="w-3 h-3" />
                       </Button>
                     </div>
@@ -122,10 +122,10 @@ export function MessageBubble({ message, isOwnMessage, onEdit, onDelete }: Messa
                     }}
                   />
                   <Button size="sm" onClick={handleSaveEdit} className="p-1">
-                    <Check className="w-3 h-3" />
+                    <Check className="w-6 h-3" />
                   </Button>
-                  <Button size="sm" variant="outline" onClick={handleCancelEdit} className="p-1">
-                    <X className="w-3 h-3" />
+                  <Button size="sm" variant="destructive" onClick={handleCancelEdit} className="p-1">
+                    <X className="w-5 h-4" />
                   </Button>
                 </div>
               ) : (
@@ -139,7 +139,7 @@ export function MessageBubble({ message, isOwnMessage, onEdit, onDelete }: Messa
           <p className={`text-xs text-gray-500 ${isOwnMessage ? 'text-right' : 'text-left'}`}>
             {formatTime(message.timestamp)}
           </p>
-          {message.messageText !== editText && message.messageText && (
+          {message.updatedAt && (
             <span className="text-xs text-gray-400">(edited)</span>
           )}
         </div>
@@ -147,7 +147,7 @@ export function MessageBubble({ message, isOwnMessage, onEdit, onDelete }: Messa
 
       {/* Action Buttons - Only show for own messages */}
       {isOwnMessage && !isEditing && (
-        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+        <div className={`flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity ${isOwnMessage ? 'mr-2' : 'ml-2'}`}>
           {message.type === 'text' && (
             <Button
               variant="ghost"
@@ -155,7 +155,7 @@ export function MessageBubble({ message, isOwnMessage, onEdit, onDelete }: Messa
               onClick={handleEdit}
               className="h-6 w-6 p-0 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
             >
-              <Edit2 className="w-3 h-3" />
+              <Edit2 className="w-5 h-5" />
             </Button>
           )}
           
@@ -166,7 +166,7 @@ export function MessageBubble({ message, isOwnMessage, onEdit, onDelete }: Messa
                 size="sm"
                 className="h-6 w-6 p-0 text-gray-500 hover:text-red-600 hover:bg-red-50"
               >
-                <Trash2 className="w-3 h-3" />
+                <Trash2 className="w-5 h-5" />
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
