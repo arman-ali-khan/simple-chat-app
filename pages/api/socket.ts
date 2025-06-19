@@ -25,6 +25,16 @@ export default function handler(req: NextApiRequest, res: NextApiResponseServerI
         socket.broadcast.emit('newMessage', message);
       });
 
+      socket.on('messageUpdated', (message) => {
+        console.log('Broadcasting message update:', message);
+        socket.broadcast.emit('messageUpdated', message);
+      });
+
+      socket.on('messageDeleted', (messageId) => {
+        console.log('Broadcasting message deletion:', messageId);
+        socket.broadcast.emit('messageDeleted', messageId);
+      });
+
       socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
       });

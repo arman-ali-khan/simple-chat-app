@@ -80,11 +80,23 @@ export default function ChatPage() {
 
     socket.on('newMessage', (message: ChatMessage) => {
       console.log('Received new message:', message);
-      // Only add messages from other users, not our own
+      // Only add messages from other users (not from current user)
       const storedUsername = localStorage.getItem('username');
       if (message.senderUsername !== storedUsername) {
         setMessages(prev => [...prev, message]);
       }
+    });
+
+    socket.on('messageUpdated', (updatedMessage: ChatMessage) => {
+      console.log('Message updated:', updatedMessage);
+      setMessages(prev => prev.map(msg => 
+        msg.id === updatedMessage.id ? updatedMessage : msg
+      ));
+    });
+
+    socket.on('messageDeleted', (messageId: string) => {
+      console.log('Message deleted:', messageId);
+      setMessages(prev => prev.filter(msg => msg.id !== messageId));
     });
   };
 
@@ -129,23 +141,75 @@ export default function ChatPage() {
 
       if (response.ok) {
         const savedMessage = await response.json();
-        const messageToEmit = {
+        const messageToAdd = {
           ...savedMessage,
           id: savedMessage._id,
         };
         
         // Add message to local state immediately for the sender
-        setMessages(prev => [...prev, messageToEmit]);
+        setMessages(prev => [...prev, messageToAdd]);
         
-        // Emit to other users only (sender won't receive it back)
+        // Emit to other users via socket (they will receive it via 'newMessage' event)
         if (socket && socket.connected) {
-          socket.emit('sendMessage', messageToEmit);
+          socket.emit('sendMessage', messageToAdd);
         }
         
         setNewMessage('');
       }
     } catch (error) {
       console.error('Error sending message:', error);
+    }
+  };
+
+  const editMessage = async (messageId: string, newText: string) => {
+    try {
+      const response = await fetch(`/api/messages/${messageId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messageText: newText }),
+      });
+
+      if (response.ok) {
+        const updatedMessage = await response.json();
+        const messageToUpdate = {
+          ...updatedMessage,
+          id: updatedMessage._id,
+        };
+        
+        // Update message in local state
+        setMessages(prev => prev.map(msg => 
+          msg.id === messageId ? messageToUpdate : msg
+        ));
+        
+        // Emit to other users via socket
+        if (socket && socket.connected) {
+          socket.emit('messageUpdated', messageToUpdate);
+        }
+      }
+    } catch (error) {
+      console.error('Error editing message:', error);
+    }
+  };
+
+  const deleteMessage = async (messageId: string) => {
+    try {
+      const response = await fetch(`/api/messages/${messageId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        // Remove message from local state
+        setMessages(prev => prev.filter(msg => msg.id !== messageId));
+        
+        // Emit to other users via socket
+        if (socket && socket.connected) {
+          socket.emit('messageDeleted', messageId);
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting message:', error);
     }
   };
 
@@ -180,72 +244,86 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-4">
-      <div className="max-w-4xl mx-auto h-screen flex flex-col">
-        <Card className="flex-1 backdrop-blur-sm bg-white/80 border-0 shadow-xl flex flex-col">
-          <CardHeader className="border-b bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-t-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleBack}
-                  className="text-white hover:bg-white/20"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                </Button>
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <MessageCircle className="w-6 h-6" />
-                    ChatFlow
-                  </CardTitle>
-                  <p className="text-blue-100 text-sm">Welcome, {username}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'}`} />
-                <span className="text-sm">{isConnected ? 'Connected' : 'Disconnected'}</span>
+    <div className="h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex flex-col overflow-hidden">
+      {/* Fixed Header */}
+      <div className="flex-shrink-0 bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg z-10">
+        <div className="max-w-4xl mx-auto px-3 py-3 sm:px-6 sm:py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleBack}
+                className="text-white hover:bg-white/20 p-1 sm:p-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+              <div>
+                <h1 className="flex items-center gap-2 text-lg sm:text-xl font-semibold">
+                  <MessageCircle className="w-5 h-5 sm:w-6 sm:h-6" />
+                  ChatFlow
+                </h1>
+                <p className="text-blue-100 text-xs sm:text-sm">Welcome, {username}</p>
               </div>
             </div>
-          </CardHeader>
-
-          <CardContent className="flex-1 p-0 flex flex-col">
-            <ScrollArea className="flex-1 p-4">
-              <div className="space-y-4">
-                {messages.map((message) => (
-                  <MessageBubble
-                    key={message.id}
-                    message={message}
-                    isOwnMessage={message.senderUsername === username}
-                  />
-                ))}
-                <div ref={messagesEndRef} />
-              </div>
-            </ScrollArea>
-
-            <div className="border-t p-4 bg-white/50">
-              <form onSubmit={handleSubmit} className="flex items-end gap-3">
-                <div className="flex-1">
-                  <Input
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Type your message..."
-                    className="resize-none min-h-[44px] rounded-full"
-                    disabled={!isConnected}
-                  />
-                </div>
-                <ImageUpload onImageUpload={handleImageUpload} disabled={!isConnected} />
-                <Button
-                  type="submit"
-                  disabled={!newMessage.trim() || !isConnected}
-                  className="rounded-full w-11 h-11 p-0 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
-                >
-                  <Send className="w-4 h-4" />
-                </Button>
-              </form>
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'}`} />
+              <span className="text-xs sm:text-sm">{isConnected ? 'Connected' : 'Disconnected'}</span>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+      </div>
+
+      {/* Messages Area */}
+      <div className="flex-1 overflow-hidden">
+        <div className="max-w-4xl mx-auto h-full flex flex-col">
+          <ScrollArea className="flex-1 p-2 sm:p-4">
+            <div className="space-y-3 sm:space-y-4 pb-4">
+              {messages.map((message) => (
+                <MessageBubble
+                  key={message.id}
+                  message={message}
+                  isOwnMessage={message.senderUsername === username}
+                  onEdit={editMessage}
+                  onDelete={deleteMessage}
+                />
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+          </ScrollArea>
+        </div>
+      </div>
+
+      {/* Fixed Bottom Input */}
+      <div className="flex-shrink-0 bg-white/90 backdrop-blur-sm border-t shadow-lg z-10">
+        <div className="max-w-4xl mx-auto p-2 sm:p-4 safe-area-inset-bottom">
+          <form onSubmit={handleSubmit} className="flex items-end gap-2 sm:gap-3 relative">
+            <div className="flex-1 min-w-0">
+              <Input
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="Type your message..."
+                className="resize-none min-h-[44px] rounded-full text-sm sm:text-base px-3 sm:px-4"
+                disabled={!isConnected}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="sentences"
+              />
+            </div>
+            <div className="flex-shrink-0">
+              <ImageUpload onImageUpload={handleImageUpload} disabled={!isConnected} />
+            </div>
+            <div className="flex-shrink-0">
+              <Button
+                type="submit"
+                disabled={!newMessage.trim() || !isConnected}
+                className="rounded-full w-11 h-11 p-0 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 touch-manipulation"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );

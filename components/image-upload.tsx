@@ -44,17 +44,17 @@ export function ImageUpload({ onImageUpload, disabled }: ImageUploadProps) {
 
   if (preview) {
     return (
-      <div className="flex flex-col gap-2 p-3 bg-white rounded-lg border">
+      <div className="absolute bottom-full left-0 right-0 mb-2 p-3 bg-white rounded-lg border shadow-lg z-20">
         <img
           src={preview}
           alt="Preview"
-          className="w-32 h-32 object-cover rounded-lg"
+          className="w-full max-w-32 h-32 object-cover rounded-lg mx-auto"
         />
-        <div className="flex gap-2">
+        <div className="flex gap-2 mt-2">
           <Button
             onClick={handleSendImage}
             size="sm"
-            className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+            className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 touch-manipulation"
           >
             Send
           </Button>
@@ -62,7 +62,7 @@ export function ImageUpload({ onImageUpload, disabled }: ImageUploadProps) {
             onClick={handleCancel}
             size="sm"
             variant="outline"
-            className="px-2"
+            className="px-2 touch-manipulation"
           >
             <X className="w-4 h-4" />
           </Button>
@@ -86,7 +86,7 @@ export function ImageUpload({ onImageUpload, disabled }: ImageUploadProps) {
         onClick={() => fileInputRef.current?.click()}
         disabled={disabled}
         variant="outline"
-        className="rounded-full w-11 h-11 p-0"
+        className="rounded-full w-11 h-11 p-0 touch-manipulation"
       >
         <ImagePlus className="w-4 h-4" />
       </Button>
