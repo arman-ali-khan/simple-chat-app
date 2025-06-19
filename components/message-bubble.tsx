@@ -4,13 +4,18 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChatMessage } from '@/types/message';
-import { Edit2, Trash2, Check, X, MoreVertical } from 'lucide-react';
+import { Edit2, Trash2, Check, X } from 'lucide-react';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -46,9 +51,7 @@ export function MessageBubble({ message, isOwnMessage, onEdit, onDelete }: Messa
   };
 
   const handleDelete = () => {
-    if (window.confirm('Are you sure you want to delete this message?')) {
-      onDelete(message.id);
-    }
+    onDelete(message.id);
   };
 
   return (
@@ -130,35 +133,6 @@ export function MessageBubble({ message, isOwnMessage, onEdit, onDelete }: Messa
               )}
             </div>
           )}
-
-          {/* Action Menu - Only show for own messages */}
-          {isOwnMessage && !isEditing && (
-            <div className={`absolute top-2 ${isOwnMessage ? 'left-2' : 'right-2'} opacity-0 group-hover:opacity-100 transition-opacity`}>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className={`h-6 w-6 p-0 ${isOwnMessage ? 'text-white hover:bg-white/20' : 'text-gray-500 hover:bg-gray-100'}`}
-                  >
-                    <MoreVertical className="w-3 h-3" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-32">
-                  {message.type === 'text' && (
-                    <DropdownMenuItem onClick={handleEdit} className="text-sm">
-                      <Edit2 className="w-3 h-3 mr-2" />
-                      Edit
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem onClick={handleDelete} className="text-sm text-red-600">
-                    <Trash2 className="w-3 h-3 mr-2" />
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          )}
         </div>
         
         <div className="flex items-center gap-2 mt-1">
@@ -170,6 +144,51 @@ export function MessageBubble({ message, isOwnMessage, onEdit, onDelete }: Messa
           )}
         </div>
       </div>
+
+      {/* Action Buttons - Only show for own messages */}
+      {isOwnMessage && !isEditing && (
+        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+          {message.type === 'text' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleEdit}
+              className="h-6 w-6 p-0 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+            >
+              <Edit2 className="w-3 h-3" />
+            </Button>
+          )}
+          
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 text-gray-500 hover:text-red-600 hover:bg-red-50"
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Message</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete this message? This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDelete}
+                  className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      )}
     </div>
   );
 }

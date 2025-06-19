@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageBubble } from '@/components/message-bubble';
 import { ImageUpload } from '@/components/image-upload';
-import { Send, MessageCircle, ArrowLeft } from 'lucide-react';
+import { Send, MessageCircle, ArrowLeft, Wifi, WifiOff } from 'lucide-react';
 import { ChatMessage } from '@/types/message';
 
 let socket: Socket;
@@ -20,12 +20,29 @@ export default function ChatPage() {
   const [username, setUsername] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  useEffect(() => {
+    // Monitor online status
+    const updateOnlineStatus = () => {
+      setIsOnline(navigator.onLine);
+    };
+
+    setIsOnline(navigator.onLine);
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+
+    return () => {
+      window.removeEventListener('online', updateOnlineStatus);
+      window.removeEventListener('offline', updateOnlineStatus);
+    };
+  }, []);
 
   useEffect(() => {
     const storedUsername = localStorage.getItem('username');
@@ -80,11 +97,8 @@ export default function ChatPage() {
 
     socket.on('newMessage', (message: ChatMessage) => {
       console.log('Received new message:', message);
-      // Only add messages from other users (not from current user)
-      const storedUsername = localStorage.getItem('username');
-      if (message.senderUsername !== storedUsername) {
-        setMessages(prev => [...prev, message]);
-      }
+      // Add message to state
+      setMessages(prev => [...prev, message]);
     });
 
     socket.on('messageUpdated', (updatedMessage: ChatMessage) => {
@@ -266,9 +280,26 @@ export default function ChatPage() {
                 <p className="text-blue-100 text-xs sm:text-sm">Welcome, {username}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'}`} />
-              <span className="text-xs sm:text-sm">{isConnected ? 'Connected' : 'Disconnected'}</span>
+            <div className="flex items-center gap-3">
+              {/* Internet Status */}
+              <div className="flex items-center gap-1">
+                {isOnline ? (
+                  <Wifi className="w-4 h-4 text-green-300" />
+                ) : (
+                  <WifiOff className="w-4 h-4 text-red-300" />
+                )}
+                <span className="text-xs hidden sm:inline">
+                  {isOnline ? 'Online' : 'Offline'}
+                </span>
+              </div>
+              
+              {/* Socket Connection Status */}
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${isConnected && isOnline ? 'bg-green-400' : 'bg-red-400'}`} />
+                <span className="text-xs sm:text-sm">
+                  {isConnected && isOnline ? 'Connected' : 'Disconnected'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -302,21 +333,21 @@ export default function ChatPage() {
               <Input
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="Type your message..."
+                placeholder={isOnline ? "Type your message..." : "You're offline..."}
                 className="resize-none min-h-[44px] rounded-full text-sm sm:text-base px-3 sm:px-4"
-                disabled={!isConnected}
+                disabled={!isConnected || !isOnline}
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="sentences"
               />
             </div>
             <div className="flex-shrink-0">
-              <ImageUpload onImageUpload={handleImageUpload} disabled={!isConnected} />
+              <ImageUpload onImageUpload={handleImageUpload} disabled={!isConnected || !isOnline} />
             </div>
             <div className="flex-shrink-0">
               <Button
                 type="submit"
-                disabled={!newMessage.trim() || !isConnected}
+                disabled={!newMessage.trim() || !isConnected || !isOnline}
                 className="rounded-full w-11 h-11 p-0 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 touch-manipulation"
               >
                 <Send className="w-4 h-4" />
